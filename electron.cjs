@@ -26,9 +26,22 @@ function createWindow() {
 
   if (isDev) {
     win.loadURL('http://localhost:3000');
+    win.webContents.openDevTools();
   } else {
-    win.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    const indexPath = path.join(__dirname, 'dist', 'index.html');
+    console.log('Loading production file:', indexPath);
+    win.loadFile(indexPath).catch(err => {
+      console.error('Failed to load index.html:', err);
+    });
+    // Temporarily open DevTools in production to debug blank screen
+    win.webContents.openDevTools();
   }
+
+  // Error logging for loading failures
+  win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`Failed to load URL: ${validatedURL}`);
+    console.error(`Error Code: ${errorCode} (${errorDescription})`);
+  });
 
   // Content Security Policy
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -37,8 +50,8 @@ function createWindow() {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           "default-src 'self' file: data: blob:; " +
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; " +
-          "style-src 'self' 'unsafe-inline'; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' file: blob:; " +
+          "style-src 'self' 'unsafe-inline' file:; " +
           "img-src 'self' file: data: blob:; " +
           "connect-src 'self' https://generativelanguage.googleapis.com"
         ]

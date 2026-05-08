@@ -10,6 +10,22 @@ export enum StitchType {
   END = 'END',
 }
 
+export enum ThreadBrand {
+  MADEIRA = 'Madeira Rayon',
+  ROBISON_ANTON = 'Robison-Anton',
+  SULKY = 'Sulky Rayon',
+  BROTHER = 'Brother',
+  JANOME = 'Janome',
+  CUSTOM = 'Custom',
+}
+
+export interface ThreadColor {
+  code: string;
+  name: string;
+  hex: string;
+  brand: ThreadBrand;
+}
+
 export interface Stitch {
   x: number;
   y: number;
@@ -27,6 +43,7 @@ export interface DesignMetadata {
   totalStitches: number;
   colorCount: number;
   colors: string[]; // Hex strings
+  threadInfo?: (ThreadColor | null)[];
   tags: string[];
   isFavorite: boolean;
   notes?: string;

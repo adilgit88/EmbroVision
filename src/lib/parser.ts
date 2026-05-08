@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Stitch, StitchType, DesignWithStitches } from '../types';
+import { Stitch, StitchType, DesignWithStitches, ThreadBrand } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { findNearestThread, isBlackOrVeryDark } from './threads';
 
 /**
  * Simplified DST (Tajima) Parser
@@ -14,15 +15,25 @@ export async function parseEmbroideryFile(file: File): Promise<DesignWithStitche
     const buffer = await file.arrayBuffer();
     const data = new Uint8Array(buffer);
     const format = file.name.split('.').pop()?.toUpperCase() || 'DST';
+    const isWilcomHatch = file.name.toLowerCase().includes('wilcom') || file.name.toLowerCase().includes('hatch');
     
     // Safety check for empty files
     if (data.length === 0) throw new Error("Empty file");
 
+    let design;
     if (format === 'DST' && data.length > 512) {
-      return parseDST(data, file.name);
+      design = parseDST(data, file.name);
     } else {
-      return generateMockDesign(file.name, format);
+      design = generateMockDesign(file.name, format);
     }
+
+    if (isWilcomHatch) {
+      design.tags.push('Wilcom/Hatch Source');
+      if (!design.threadInfo || design.threadInfo.every(t => !t)) {
+        design.error = "Wilcom/Hatch color data might be lost — check thread assignments.";
+      }
+    }
+    return design;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("Parser Error:", error);
@@ -129,7 +140,8 @@ function parseDST(data: Uint8Array, filename: string): DesignWithStitches {
     totalStitches: stitches.length,
     colorCount: colorIndex + 1,
     colors: generateRandomColors(colorIndex + 1),
-    tags: ['Imported'],
+    threadInfo: new Array(colorIndex + 1).fill(null), // DST has no color info
+    tags: ['Imported', 'No Color Data'],
     isFavorite: false,
     stitches,
     createdAt: Date.now(),
@@ -167,6 +179,9 @@ function generateMockDesign(filename: string, format: string): DesignWithStitche
   
   stitches.push({ x: 0, y: 0, type: StitchType.END, colorIndex: colorCount - 1 });
 
+  const colors = generateRandomColors(colorCount);
+  const threadInfo = colors.map(c => findNearestThread(c, ThreadBrand.BROTHER));
+
   return {
     id: uuidv4(),
     name: filename.replace(/\.[^/.]+$/, ""),
@@ -176,7 +191,8 @@ function generateMockDesign(filename: string, format: string): DesignWithStitche
     height: 200,
     totalStitches: stitches.length,
     colorCount,
-    colors: generateRandomColors(colorCount),
+    colors,
+    threadInfo,
     tags: ['Sample'],
     isFavorite: Math.random() > 0.5,
     stitches,

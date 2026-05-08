@@ -18,10 +18,17 @@ import {
   ChevronRight,
   Clock,
   MoreVertical,
-  Star
+  Star,
+  AlertTriangle,
+  CheckCircle2,
+  Settings2,
+  Monitor,
+  Cpu
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
+import { ThreadBrand, ThreadColor } from '../types';
+import { THREAD_LIBRARIES, findNearestThread, isBlackOrVeryDark, isExactMatch } from '../lib/threads';
 
 interface DetailsPanelProps {
   design: DesignMetadata | null;
@@ -30,6 +37,9 @@ interface DetailsPanelProps {
   onDelete?: () => void;
   onPrint?: () => void;
   onRescan?: () => void;
+  onUpdateDesign?: (updates: Partial<DesignMetadata>) => void;
+  isMachinePreview?: boolean;
+  onToggleMachinePreview?: () => void;
 }
 
 export default function DetailsPanel({ 
@@ -38,8 +48,14 @@ export default function DetailsPanel({
   onToggleFavorite, 
   onDelete, 
   onPrint,
-  onRescan
+  onRescan,
+  onUpdateDesign,
+  isMachinePreview,
+  onToggleMachinePreview
 }: DetailsPanelProps) {
+  const [editingColorIdx, setEditingColorIdx] = React.useState<number | null>(null);
+  const [selectedBrand, setSelectedBrand] = React.useState<ThreadBrand>(ThreadBrand.MADEIRA);
+
   if (!design) {
     return (
       <aside className="w-80 bg-white border-l border-[#e0e0e0] flex flex-col items-center justify-center p-8 text-center select-none">
@@ -130,21 +146,169 @@ export default function DetailsPanel({
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-5 py-6 space-y-8">
         
-        {/* Thread Sequence */}
+        {/* Thread Sequence & Accuracy Validation */}
         <section>
-          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">
-             Color Sequence
-          </h3>
-          <div className="grid grid-cols-5 gap-2">
-            {design.colors.map((color, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-1 group">
-                <div 
-                  className="w-full aspect-square rounded-[2px] shadow-sm border border-black/5" 
-                  style={{ backgroundColor: color }}
-                />
-                <span className="text-[9px] font-bold text-gray-400">{idx + 1}</span>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+               Thread Accuracy & Sequence
+            </h3>
+            <select 
+              value={selectedBrand}
+              onChange={(e) => setSelectedBrand(e.target.value as ThreadBrand)}
+              className="text-[10px] bg-gray-100 border-none rounded px-2 py-0.5 font-bold text-gray-600 outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer"
+            >
+              {Object.values(ThreadBrand).map(brand => (
+                <option key={brand} value={brand}>{brand}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* DST Warning */}
+          {design.format === 'DST' && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-100 rounded flex gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <div>
+                <p className="text-[10px] font-bold text-amber-700 uppercase">Input Warning</p>
+                <p className="text-[10px] text-amber-600 leading-tight mt-0.5">
+                  DST format has no color data. Assign threads manually for accuracy.
+                </p>
               </div>
-            ))}
+              {/* DST CSV Export */}
+              {design.format === 'DST' && (
+                <button 
+                  onClick={() => {
+                    const csv = "Stitch,Color,Thread,Brand\n" + design.colors.map((c, i) => `${i+1},${c},${design.threadInfo?.[i]?.code || 'N/A'},${design.threadInfo?.[i]?.brand || 'N/A'}`).join('\n');
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${design.name}_colors.csv`;
+                    a.click();
+                  }}
+                  className="w-full bg-blue-50 border border-blue-200 text-blue-600 text-[10px] font-bold py-1.5 rounded hover:bg-blue-100 transition-colors mt-4 flex items-center justify-center gap-2"
+                >
+                  <Share2 className="w-3 h-3" />
+                  Export DST Color Sequence CSV
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {design.colors.map((color, idx) => {
+              const currentThread = design.threadInfo?.[idx];
+              const bestMatch = findNearestThread(color, selectedBrand);
+              const isPerfect = currentThread ? isExactMatch(color, currentThread.hex) : false;
+              const isDark = isBlackOrVeryDark(color);
+              
+              return (
+                <div 
+                  key={idx} 
+                  onClick={() => setEditingColorIdx(idx === editingColorIdx ? null : idx)}
+                  className={cn(
+                    "group p-2 rounded border transition-all cursor-pointer",
+                    editingColorIdx === idx 
+                      ? "bg-blue-50 border-blue-200" 
+                      : "bg-white border-transparent hover:border-gray-200 hover:bg-gray-50"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div 
+                        className="w-10 h-10 rounded shadow-inner border border-black/5" 
+                        style={{ backgroundColor: color }}
+                      />
+                      <span className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-gray-600 text-white text-[9px] flex items-center justify-center rounded-full font-bold border border-white">
+                        {idx + 1}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-bold text-gray-900 truncate">
+                          {currentThread ? `${currentThread.brand} ${currentThread.code} - ${currentThread.name}` : 'Unknown Thread'}
+                        </p>
+                        {isPerfect ? (
+                           <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
+                        ) : (
+                           <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 font-medium">
+                        {color.toUpperCase()} 
+                        {!isPerfect && ` • Match: ${bestMatch.code} (${bestMatch.name})`}
+                      </p>
+                      {isDark && (
+                        <p className="text-[9px] text-red-500 font-bold mt-1 flex items-center gap-1 uppercase">
+                          <Activity className="w-2.5 h-2.5" /> Potential Black Mismatch
+                        </p>
+                      )}
+                    </div>
+
+                    <ChevronRight className={cn("w-3.5 h-3.5 text-gray-300 transition-transform", editingColorIdx === idx && "rotate-90")} />
+                  </div>
+
+                  {/* Color Editor Mini-Expander */}
+                  {editingColorIdx === idx && (
+                    <div className="mt-3 pt-3 border-t border-blue-100">
+                      <p className="text-[9px] font-bold text-blue-400 uppercase tracking-widest mb-2">Assign from {selectedBrand}</p>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {THREAD_LIBRARIES[selectedBrand].slice(0, 8).map((thread) => (
+                           <button
+                             key={thread.code}
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               if (onUpdateDesign) {
+                                 const newColors = [...design.colors];
+                                 const newThreads = [...(design.threadInfo || [])];
+                                 newColors[idx] = thread.hex;
+                                 newThreads[idx] = thread;
+                                 onUpdateDesign({ colors: newColors, threadInfo: newThreads });
+                               }
+                             }}
+                             className="group/btn flex flex-col items-center gap-1"
+                           >
+                             <div 
+                               className="w-full aspect-square rounded-[2px] border border-black/5 hover:scale-105 transition-transform" 
+                               style={{ backgroundColor: thread.hex }}
+                               title={`${thread.code} - ${thread.name}`}
+                             />
+                             <span className="text-[8px] font-bold text-gray-400 scale-[0.8]">{thread.code}</span>
+                           </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Machine Simulation Toggle */}
+        <section>
+          <div className="p-4 bg-gray-900 rounded-lg border border-white/5 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+               <div className="flex items-center gap-2">
+                 <Monitor className="w-4 h-4 text-blue-400" />
+                 <p className="text-[10px] font-bold text-white uppercase tracking-widest">Machine Simulation</p>
+               </div>
+               <button 
+                 onClick={onToggleMachinePreview}
+                 className={cn(
+                   "w-8 h-4 rounded-full relative transition-colors",
+                   isMachinePreview ? "bg-blue-500" : "bg-gray-700"
+                 )}
+               >
+                 <div className={cn(
+                   "absolute top-0.5 w-3 h-3 bg-white rounded-full transition-transform shadow-md",
+                   isMachinePreview ? "left-4.5" : "left-0.5"
+                 )} />
+               </button>
+            </div>
+            <p className="text-[10px] text-gray-400 leading-relaxed italic">
+              Enable to see how design renders on a low-fidelity machine LCD.
+            </p>
           </div>
         </section>
 

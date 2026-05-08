@@ -51,6 +51,7 @@ export default function App() {
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [selectedDesign, setSelectedDesign] = useState<DesignWithStitches | null>(null);
   const [simulationIndex, setSimulationIndex] = useState<number>(-1);
+  const [isMachinePreview, setIsMachinePreview] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -212,6 +213,18 @@ export default function App() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleUpdateDesign = async (updates: Partial<DesignMetadata>) => {
+    if (!selectedDesign) return;
+    try {
+      await db.designs.update(selectedDesign.id, updates);
+      setSelectedDesign(prev => prev ? { ...prev, ...updates } as DesignWithStitches : null);
+      setNotification({ message: "Design updated successfully.", type: 'success' });
+      setTimeout(() => setNotification(null), 3000);
+    } catch (err) {
+      setNotification({ message: "Failed to update design.", type: 'error' });
+    }
   };
 
 
@@ -525,6 +538,9 @@ export default function App() {
               onDelete={() => selectedDesign && handleDeleteDesign(selectedDesign.id)}
               onPrint={handlePrint}
               onRescan={handleRescan}
+              onUpdateDesign={handleUpdateDesign}
+              isMachinePreview={isMachinePreview}
+              onToggleMachinePreview={() => setIsMachinePreview(!isMachinePreview)}
             />
           </div>
         </main>
@@ -633,6 +649,7 @@ export default function App() {
                onClose={() => setSelectedDesign(null)} 
                onOpenLocation={() => showInExplorer(selectedDesign.path)}
                simulationIndex={simulationIndex}
+               isMachinePreview={isMachinePreview}
              />
              
              {/* Simulator Hook */}

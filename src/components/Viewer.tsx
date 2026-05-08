@@ -26,9 +26,16 @@ interface ViewerProps {
   onClose: () => void;
   onOpenLocation?: () => void;
   simulationIndex?: number;
+  isMachinePreview?: boolean;
 }
 
-export default function Viewer({ design, onClose, onOpenLocation, simulationIndex = -1 }: ViewerProps) {
+export default function Viewer({ 
+  design, 
+  onClose, 
+  onOpenLocation, 
+  simulationIndex = -1,
+  isMachinePreview = false
+}: ViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -48,7 +55,7 @@ export default function Viewer({ design, onClose, onOpenLocation, simulationInde
 
   useEffect(() => {
     draw();
-  }, [design, zoom, offset, isDarkMode, viewSettings, simulationIndex]);
+  }, [design, zoom, offset, isDarkMode, viewSettings, simulationIndex, isMachinePreview]);
 
   const draw = () => {
     const canvas = canvasRef.current;
@@ -62,14 +69,69 @@ export default function Viewer({ design, onClose, onOpenLocation, simulationInde
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Background Grid
-    drawGrid(ctx, canvas.width, canvas.height);
+    if (isMachinePreview) {
+      // Split view: Left = App View, Right = Machine View
+      const splitX = canvas.width / 2;
+      
+      // Draw App View (Left)
+      renderView(ctx, 0, 0, splitX, canvas.height, 'app');
+      
+      // Draw Divider
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(splitX, 0);
+      ctx.lineTo(splitX, canvas.height);
+      ctx.stroke();
 
+      // Draw Machine View (Right)
+      renderView(ctx, splitX, 0, splitX, canvas.height, 'machine');
+      
+      // Labels
+      ctx.fillStyle = '#1a1a1a';
+      ctx.font = 'bold 10px Inter';
+      ctx.fillText('DESIGNER VIEW', 20, 30);
+      ctx.fillText('MACHINE PREVIEW', splitX + 20, 30);
+    } else {
+      renderView(ctx, 0, 0, canvas.width, canvas.height, 'app');
+    }
+  };
+
+  const renderView = (
+    ctx: CanvasRenderingContext2D, 
+    x: number, 
+    y: number, 
+    w: number, 
+    h: number, 
+    mode: 'app' | 'machine'
+  ) => {
     ctx.save();
-    ctx.translate(canvas.width / 2 + offset.x, canvas.height / 2 + offset.y);
+    
+    // Clip to region
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+
+    // Background
+    if (mode === 'machine') {
+      ctx.fillStyle = '#2c3e50'; // Industrial gray/blue
+      ctx.fillRect(x, y, w, h);
+      // Scanlines for LCD effect
+      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+      ctx.lineWidth = 1;
+      for (let i = y; i < y + h; i += 3) {
+        ctx.beginPath();
+        ctx.moveTo(x, i);
+        ctx.lineTo(x + w, i);
+        ctx.stroke();
+      }
+    } else {
+      drawGrid(ctx, w, h, x, y);
+    }
+
+    ctx.translate(x + w / 2 + offset.x, y + h / 2 + offset.y);
     ctx.scale(zoom, zoom);
 
-    // Initial position
     let lastX = 0;
     let lastY = 0;
 
@@ -78,8 +140,6 @@ export default function Viewer({ design, onClose, onOpenLocation, simulationInde
       : design.stitches.slice(0, simulationIndex);
 
     stitchesToDraw.forEach((s) => {
-      // Note: Embroidery coordinates are usually in 0.1mm units
-      // We'll normalize them for rendering
       const px = s.x; 
       const py = s.y;
 
@@ -88,13 +148,24 @@ export default function Viewer({ design, onClose, onOpenLocation, simulationInde
         ctx.lineWidth = viewSettings.realistic ? 2 / zoom : 1 / zoom;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.strokeStyle = design.colors[s.colorIndex % design.colors.length];
+        
+        let strokeColor = design.colors[s.colorIndex % design.colors.length];
+        
+        if (mode === 'machine') {
+          // Machine view simplifies colors and adds more contrast
+          // Or just renders them slightly differently
+          ctx.shadowBlur = 4 / zoom;
+          ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        }
+
+        ctx.strokeStyle = strokeColor;
         ctx.moveTo(lastX, lastY);
         ctx.lineTo(px, py);
         ctx.stroke();
+        
+        ctx.shadowBlur = 0;
 
-        if (viewSettings.realistic) {
-          // Add thread texture/lighting
+        if (viewSettings.realistic && mode === 'app') {
           ctx.beginPath();
           ctx.strokeStyle = 'rgba(255,255,255,0.2)';
           ctx.lineWidth = 0.5 / zoom;
@@ -102,20 +173,6 @@ export default function Viewer({ design, onClose, onOpenLocation, simulationInde
           ctx.lineTo(px, py);
           ctx.stroke();
         }
-      } else if (viewSettings.showConnectors && s.type === StitchType.JUMP) {
-        ctx.beginPath();
-        ctx.setLineDash([5 / zoom, 5 / zoom]);
-        ctx.lineWidth = 0.5 / zoom;
-        ctx.strokeStyle = '#9ca3af';
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(px, py);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      if (viewSettings.showPoints) {
-        ctx.fillStyle = s.type === StitchType.STOP ? '#ef4444' : '#3b82f6';
-        ctx.fillRect(px - 1/zoom, py - 1/zoom, 2/zoom, 2/zoom);
       }
 
       lastX = px;
@@ -125,32 +182,28 @@ export default function Viewer({ design, onClose, onOpenLocation, simulationInde
     ctx.restore();
   };
 
-  const drawGrid = (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+  const drawGrid = (ctx: CanvasRenderingContext2D, w: number, h: number, startX: number = 0, startY: number = 0) => {
     ctx.strokeStyle = isDarkMode ? '#1f2937' : '#e5e7eb';
     ctx.lineWidth = 1;
     
-    // Grid size in pixels, adjusted by zoom
     const step = 50 * zoom;
     
     ctx.beginPath();
-    // Vertical lines
-    for (let x = (w / 2 + offset.x) % step; x < w; x += step) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
+    for (let lx = (w / 2 + offset.x) % step; lx < w; lx += step) {
+      ctx.moveTo(startX + lx, startY);
+      ctx.lineTo(startX + lx, startY + h);
     }
-    // Horizontal lines
-    for (let y = (h / 2 + offset.y) % step; y < h; y += step) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
+    for (let ly = (h / 2 + offset.y) % step; ly < h; ly += step) {
+      ctx.moveTo(startX, startY + ly);
+      ctx.lineTo(startX + w, startY + ly);
     }
     ctx.stroke();
     
-    // Center axes
     ctx.strokeStyle = isDarkMode ? '#374151' : '#d1d5db';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(w/2 + offset.x, 0); ctx.lineTo(w/2 + offset.x, h);
-    ctx.moveTo(0, h/2 + offset.y); ctx.lineTo(w, h/2 + offset.y);
+    ctx.moveTo(startX + w/2 + offset.x, startY); ctx.lineTo(startX + w/2 + offset.x, startY + h);
+    ctx.moveTo(startX, startY + h/2 + offset.y); ctx.lineTo(startX + w, startY + h/2 + offset.y);
     ctx.stroke();
   };
 
