@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,700;0,800;1,400;1,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  @media print {
+    body {
+      background: white !important;
+    }
+    #sidebar, #app-topbar, .win-btn-primary, .win-btn-secondary, #details-panel .p-4, .fixed, .absolute, button {
+      display: none !important;
+    }
+    main {
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: visible !important;
+    }
+    #details-panel {
+      width: 100% !important;
+      border: none !important;
+      position: static !important;
+    }
+    #explorer-list, #explorer-grid {
+      display: none !important;
+    }
+    .print-only {
+      display: block !important;
+    }
+  }
+}
+
+@layer base {
+  :root {
+    --win-bg: #f3f3f3;
+    --win-sidebar: #ffffff;
+    --win-accent: #0067c0;
+    --win-accent-hover: #005aab;
+    --win-border: #e0e0e0;
+    --text-main: #1a1a1a;
+    --text-dim: #5d5d5d;
+  }
+
+  body {
+    @apply antialiased text-[#1a1a1a] bg-[#f3f3f3];
+    font-family: var(--font-sans);
+  }
+}
+
+/* Custom Scrollbar - Consistent with theme */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border: 2px solid #f1f1f1;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.win-btn-primary {
+  @apply bg-[#0067c0] hover:bg-[#005aab] text-white px-3 py-1.5 rounded transition-all active:scale-95 text-sm font-medium;
+}
+
+.win-btn-secondary {
+  @apply border border-[#e0e0e0] bg-white hover:bg-[#f9f9f9] text-[#1a1a1a] px-3 py-1.5 rounded transition-all text-sm font-medium;
+}
+
+.grid-layer {
+  background-image: radial-gradient(#d1d1d1 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
