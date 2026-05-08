@@ -25,14 +25,18 @@ interface TopBarProps {
   onOpenLocation?: () => void;
   onExport?: () => void;
   onPrint?: () => void;
+  onOpenDesign?: () => void;
 }
 
-export default function TopBar({ title, viewMode, setViewMode, onOpenLocation, onExport, onPrint }: TopBarProps) {
+export default function TopBar({ title, viewMode, setViewMode, onOpenLocation, onExport, onPrint, onOpenDesign }: TopBarProps) {
   return (
     <header id="app-topbar" className="h-[56px] bg-white border-b border-[#e0e0e0] flex items-center justify-between px-4 sticky top-0 z-10 select-none">
       <div className="flex items-center gap-5 h-full">
+        <div className="text-[14px] font-bold text-[#1a1a1a] border-r border-[#e0e0e0] pr-5 h-8 flex items-center">
+          {title}
+        </div>
         <div className="flex items-center gap-2 border-r border-[#e0e0e0] pr-5 h-8">
-          <button className="win-btn-primary">
+          <button className="win-btn-primary" onClick={onOpenDesign}>
             Open Design
           </button>
           <button className="win-btn-secondary" onClick={onOpenLocation}>
